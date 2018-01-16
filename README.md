@@ -13,3 +13,7 @@ https://openclassrooms.com/forum/sujet/serial-python-3?page=1
 
 Very nice:
 https://elinux.org/Serial_port_programming
+
+
+git config --global user.name "bmhagui"
+git config --global user.email "bmhagui@gmail.com"
