@@ -1,0 +1,348 @@
+# -*- coding: utf-8 -*-
+
+import Sofa
+
+import os
+path = os.path.dirname(os.path.abspath(__file__))+'/'
+
+GPU=1
+
+volumeFile = path+'mesh/JackInTheBox/bodyArmHead.vtk'
+# volumeFile = path+'mesh/JackInTheBox/body_v2.vtk'
+visuFile = path+'mesh/JackInTheBox/body.obj'
+colliFile = path+'mesh/JackInTheBox/bodyColli.stl'
+headFile = path+'mesh/JackInTheBox/HarleyQuinnCollerette.obj'
+handRFile = path+'mesh/JackInTheBox/handRight.obj'
+handLFile = path+'mesh/JackInTheBox/handLeft.obj'
+
+armColliFile1 = path+'mesh/JackInTheBox/armCollision_1.stl'
+armColliFile2 = path+'mesh/JackInTheBox/armCollision_2.stl'
+armColliFile3 = path+'mesh/JackInTheBox/armCollision_3.stl'
+
+boxFile = path+'mesh/JackInTheBox/theBox.obj'
+manivelleFile = path+'mesh/JackInTheBox/manivelle.obj'
+
+openingVisuFile = path+'mesh/JackInTheBox/opening.obj'
+openingColliFile = path+'mesh/JackInTheBox/openingCollision.stl'
+
+cycloVisu = path+'mesh/BabyGroot/Cyclo.obj'
+textureCyclo = path+'mesh/BabyGroot/Cyclo_Diffuse_Map.png'
+
+def createScene(rootNode):
+
+                rootNode.createObject('RequiredPlugin', pluginName='SoftRobots')
+
+                if GPU:
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDA')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaAsyncSolvers')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDASolvers')
+
+                rootNode.createObject('VisualStyle', displayFlags="showVisualModels hideBehaviorModels hideCollisionModels \
+                                        hideBoundingCollisionModels hideForceFields hideInteractionForceFields hideWireframe")
+
+                rootNode.createObject('FreeMotionAnimationLoop')
+
+                rootNode.createObject('CollisionPipeline', verbose="0")
+                rootNode.createObject('BruteForceDetection', name="N2")
+                rootNode.createObject('CollisionResponse', response="FrictionContact", responseParams="mu=0")
+                rootNode.createObject('LocalMinDistance', name="Proximity", alarmDistance="5", contactDistance="1")
+
+                rootNode.createObject('GenericConstraintSolver', printLog='0', displayTime="0",
+                maxIterations="500", tolerance="1e-14")
+
+                rootNode.createObject('BackgroundSetting', color='0 0.168627 0.211765')
+                #rootNode.createObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+
+                rootNode.findData('gravity').value="0 -9810.0 0"
+                rootNode.findData('dt').value=0.04
+
+                ##########################################
+                # Serial Port                            #
+                ##########################################
+                # rootNode.createObject('PythonScriptController', classname="controller", filename=path+"controller/JackInTheBoxController.py")
+                # rootNode.createObject('SerialPortBridgeGeneric', name="serial", receive="1", port="/dev/ttyACM0", baudRate="115200", size="13", listening="true")
+
+                ##########################################
+                # FEM Model                              #
+                ##########################################
+                accordion = rootNode.createChild('accordion')
+                accordion.createObject('EulerImplicit', firstOrder='0', rayleighStiffness="0.1", rayleighMass="0.1")
+                accordion.createObject('MeshVTKLoader', name='loader', filename=volumeFile, translation="0 -11.547 0")
+                accordion.createObject('TetrahedronSetTopologyContainer', src='@loader', name="container")
+                accordion.createObject('TetrahedronSetTopologyModifier')
+
+                if GPU:
+                    accordion.createObject('ShewchukPCGLinearSolver', iterations='25', name='linearSolver', preconditioners='precond', use_precond="true", update_step="1", tolerance='1.0e-9')
+                    accordion.createObject('CudaSparseLDLSolver', name='precond', template="AsyncCompressedRowSparseMatrix3f", useMultiThread="true")
+                else:
+                    accordion.createObject('PCGLinearSolver', name='linearSolver',iterations='25', tolerance='1.0e-9',threshold='1.0e-30', preconditioners="precond")
+                    accordion.createObject('SparseLDLSolver', name='precond')
+
+                accordion.createObject('TetrahedronSetTopologyAlgorithms')
+                accordion.createObject('TetrahedronSetGeometryAlgorithms')
+                accordion.createObject('MechanicalObject', name='tetras')
+
+                accordion.createObject('BoxROI', name='ROIHead', box='-50 125 -90  50 250 90', drawBoxes='true')
+                accordion.createObject('UniformMass', totalmass='0.150', indices="@ROIHead.indices")
+
+                accordion.createObject('BoxROI', name='ROIBody', box='-30 -90 -30  30 120 30', drawBoxes='true')
+                accordion.createObject('UniformMass', totalmass='0.220', indices="@ROIBody.indices")
+
+                accordion.createObject('BoxROI', name='ROIArms', box='-50 105 -200  50 135 -30    -50 120 -30  50 135 30    -50 105 30  50 135 200', drawBoxes='true')
+                accordion.createObject('UniformMass', totalmass='0.075', indices="@ROIArms.indices")
+
+                accordion.createObject('BoxROI', name='ROIfixed', box='-30 -90 -30  30 -70 30', drawBoxes='true')
+                accordion.createObject('RestShapeSpringsForceField', points='@ROIfixed.indices', stiffness='1e12')
+
+                # Quand on applique une force pour tirer la force en avant
+                # Resultat avec torsade : 52.1 34.1 11.6
+                # Sans torsade : 53.3 34.3 10.3
+                # On gagne un peu en x mais on perd aussi en z...
+                accordion.createObject('ConstantForceField', force="1000 0 0", indices="421", arrowSizeCoef="0.01")
+
+                accordion.createObject('TetrahedronFEMForceField', name='FEM', method='large', poissonRatio='0.3',  youngModulus='150') #80
+                accordion.createObject('LinearSolverConstraintCorrection', name='GCS', solverName='precond')
+                accordion.createObject('CommunicationController', name="sub", listening='1', job="receiver", port="5586", nbDataField="15", pattern="request/reply")
+
+                ##########################################
+                # Arm sub topology (stiffer)
+                ##########################################
+                armFEM = accordion.createChild("ArmFEM")
+                armFEM.createObject('TetrahedronSetTopologyContainer', position="@../container.position", tetras="@../ROIArms.tetrahedraInROI")
+                armFEM.createObject('TetrahedronFEMForceField', name='FEM', method='large', poissonRatio='0.3',  youngModulus='350')
+
+                ##########################################
+                # Head sub topology (stiffer)
+                ##########################################
+                headFEM = accordion.createChild("ArmFEM")
+                headFEM.createObject('TetrahedronSetTopologyContainer', position="@../container.position", tetras="@../ROIHead.tetrahedraInROI")
+                headFEM.createObject('TetrahedronFEMForceField', name='FEM', method='large', poissonRatio='0.3',  youngModulus='1500')
+
+
+                ##########################################
+                # Head                                   #
+                ##########################################
+
+                headVisu = accordion.createChild('headVisu')
+                headVisu.createObject('OglModel', filename=headFile, translation="0 19 0", color="1 1 1 1", scale3d="0.8 0.8 0.8")
+                headVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                headVisu.createObject('BarycentricMapping')
+
+
+
+                ##########################################
+                # Pressure                               #
+                ##########################################
+                for i in range(1,4):
+                    cavity = accordion.createChild('cavity'+str(i))
+                    cavity.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cavity.createObject('MeshSTLLoader', name='loader', filename=path+'mesh/JackInTheBox/cavity'+str(i)+'.stl', translation="0 -11.547 0")
+                    cavity.createObject('Mesh', src='@loader', name='topo')
+                    cavity.createObject('MechanicalObject', name='cavity')
+                    cavity.createObject('SurfacePressureConstraint', template='Vec3d', name="pressure",
+                        triangles='@topo.triangles',
+                        valueType="1",
+                        value="@../sub.data"+str(i))
+                    cavity.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+
+                ##########################################
+                # Cable                                  #
+                ##########################################
+
+                #petit cable 70
+                #grand cable 210
+                rotationCable = -30
+                for i in range(1,4):
+                    ry=120*(i-1)+rotationCable
+                    cable = accordion.createChild('cable'+str(i))
+                    cable.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cable.createObject('MechanicalObject', position="0 -80 25   0 -62.5 25    0 -50 25   0 -35 25    0 -15 25    0 2.5 25    0 18 25  0 32.5 25    0 50 25", rotation="0 "+str(ry)+" 0")
+                    cable.createObject('CableConstraint', template='Vec3d', name="cable", indices="0 1 2 3 4 ", value="@../sub.data"+str(i+3))
+                    cable.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+                rotationCable = -30
+                for i in range(1,4):
+                    ry=120*(i-1)+rotationCable
+                    cable = accordion.createChild('cable'+str(i+3))
+                    cable.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cable.createObject('MechanicalObject', position="0 -80 25   0 -62.5 25    0 -50 25   0 -35 25    0 -15 25    0 2.5 25    0 18 25 "+
+                    "0 32.5 25    0 50 25     0 70 25      0 85 25      0 97.5 25       0 112.5 25", rotation="0 "+str(ry)+" 0")
+                    cable.createObject('CableConstraint', template='Vec3d', name="cable", indices="0 1 2 3 4 5 6 7 8 9 10 11 12", value="@../sub.data"+str(i+6))
+                    cable.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+                for i in range(1,3):
+                    ry=180*(i-1)
+                    if i == 1:
+                        x=2.5
+                    else:
+                        x=-2.5
+                    cable = accordion.createChild('cable'+str(i+6))
+                    cable.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cable.createObject('MechanicalObject', position="0 -80 25   0 -62.5 25    0 -50 25   0 -35 25    0 -15 25    0 2.5 25    0 18 25 "+
+                    "0 32.5 25    0 50 25     0 70 25      0 85 25      0 97.5 25       0 112.5 25   0 118 25   0 120 20  " + str(x) +" 122.5 -33 "+ str(x) +" 122.5 -40 "+ str(x) +" 121 -53 "+ str(x) +" 121 -70 "+ str(x) +" 120 -75", rotation="0 "+str(ry)+" 0")
+                    cable.createObject('CableConstraint', template='Vec3d', name="cable", indices=range(20), value="@../sub.data"+str(i+9))
+                    cable.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+                for i in range(1,3):
+                    if i == 1:
+                        z1=40
+                        z2=260
+                    else:
+                        z1=-40
+                        z2=-260
+                    cableHead = accordion.createChild('cable'+str(i+8))
+                    cableHead.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cableHead.createObject('MechanicalObject', position=" -10 225 "+str(z1))
+                    cableHead.createObject('CableConstraint', template='Vec3d', name="cable", indices="0",
+                        pullPoint="0 450 "+str(z2), value="@../sub.data"+str(i+11))
+                    cableHead.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+                ### Torsade
+                ### Introduire un actionnement supplementaire pour essayer d'annuler l'imprécision
+                for i in range(1,3):
+                    ry=180*(i-1)
+                    cable = accordion.createChild('cable'+str(i+10))
+                    cable.createObject('VisualStyle', displayFlags="showInteractionForceFields")
+                    cable.createObject('MechanicalObject', position="27 -80 0   0.9 -62.5 27    -23 -50 17   -23 -35 -17    9 -15 -27    27 2.5 0    9 18 27 "+
+                    "-23 32.5 17    -23 50 -17     9 70 -27      27 85 0      9 97.5 27       -23 112.5 17", rotation="0 "+str(ry)+" 0")
+                    cable.createObject('CableConstraint', template='Vec3d', name="cable", indices=range(13),
+                        hasPullPoint="0",
+                        value="@../sub.data"+str(i+13))
+                    cable.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+
+                ##########################################
+                # Collision                              #
+                ##########################################
+                accordionColli = accordion.createChild('accordionColli')
+                accordionColli.createObject('VisualStyle', displayFlags="hideInteractionForceFields")
+                accordionColli.createObject('MeshSTLLoader', name="loader", filename=colliFile, translation="0 -11.547 0")
+                accordionColli.createObject('Mesh', src="@loader")
+                accordionColli.createObject('MechanicalObject')
+                accordionColli.createObject('Triangle', group="1")
+                accordionColli.createObject('Line', group="1")
+                accordionColli.createObject('Point', group="1")
+                # accordionColli.createObject('MechanicalObject', position="0 -60 0  0 -30 0  0 0 0  0 30 0  0 60 0   ")
+                # accordionColli.createObject('Sphere', radius="32.5", group="1")
+                accordionColli.createObject('BarycentricMapping')
+
+
+                accordionArmColli1 = accordion.createChild('accordionArmColli1')
+                accordionArmColli1.createObject('MeshSTLLoader', name="loader", filename=armColliFile1, translation="0 -11.547 0")
+                accordionArmColli1.createObject('Mesh', src="@loader")
+                accordionArmColli1.createObject('MechanicalObject')
+                accordionArmColli1.createObject('Triangle', group="3")
+                accordionArmColli1.createObject('Line', group="3")
+                accordionArmColli1.createObject('Point', group="3")
+                accordionArmColli1.createObject('BarycentricMapping')
+
+
+                accordionArmColli2 = accordion.createChild('accordionArmColli2')
+                accordionArmColli2.createObject('MeshSTLLoader', name="loader", filename=armColliFile2, translation="0 -11.547 0")
+                accordionArmColli2.createObject('Mesh', src="@loader")
+                accordionArmColli2.createObject('MechanicalObject')
+                accordionArmColli2.createObject('Triangle', group="1")
+                accordionArmColli2.createObject('Line', group="1")
+                accordionArmColli2.createObject('Point', group="1")
+                accordionArmColli2.createObject('BarycentricMapping')
+
+
+                accordionArmColli3 = accordion.createChild('accordionArmColli3')
+                # accordionArmColli3.createObject('MeshSTLLoader', name="loader", filename=armColliFile3, translation="0 -11.547 0")
+                # accordionArmColli3.createObject('Mesh', src="@loader")
+                # accordionArmColli3.createObject('MechanicalObject')
+                # accordionArmColli3.createObject('Triangle', group="1")
+                # accordionArmColli3.createObject('Line', group="1")
+                # accordionArmColli3.createObject('Point', group="1")
+                accordionArmColli3.createObject('MechanicalObject', position=" 0 115 -90   0 110 -100   0 105-110   0 100 -120   0 95 -130")
+                accordionArmColli3.createObject('Sphere', group="1", radius="8")
+                accordionArmColli3.createObject('BarycentricMapping')
+
+
+
+                ##########################################
+                # Visualization                          #
+                ##########################################
+                accordionVisu = accordion.createChild('visu')
+                accordionVisu.createObject('OglModel', filename=visuFile, translation="0 -11.547 0", color="1 1 1 1")
+                accordionVisu.createObject('BarycentricMapping')
+
+                handRightVisu = accordion.createChild('handRightVisu')
+                handRightVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                handRightVisu.createObject('OglModel', filename=handRFile, translation="0 -11.547 0", color="1 1 1 1")
+                handRightVisu.createObject('BarycentricMapping')
+
+                handLeftVisu = accordion.createChild('handLeftVisu')
+                handLeftVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                handLeftVisu.createObject('OglModel', filename=handLFile, translation="0 -11.547 0", color="1 1 1 1")
+                handLeftVisu.createObject('BarycentricMapping')
+
+                boxVisu = rootNode.createChild('boxVisu')
+                boxVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                boxVisu.createObject('OglModel', filename=boxFile, translation="0 -26.5 0")
+
+                ###########################################
+                # Opening
+                ###########################################
+                opening = rootNode.createChild('opening')
+                opening.createObject('EulerImplicit')
+                opening.createObject('CGLinearSolver', iterations="25", tolerance="1e-5", threshold="1e-5")
+                opening.createObject('MechanicalObject', template="Rigid3d", name="MO", position="0 -75 -70 0. 0 0 1",
+                showObject="0",
+                showObjectScale="20",
+                drawMode="2")
+                opening.createObject('FixedConstraint', indices="0")
+                opening.createObject('UniformMass', totalmass="0.1")
+                opening.createObject('UncoupledConstraintCorrection')
+
+                openingVisu = opening.createChild('openingVisu')
+                openingVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                openingVisu.createObject('OglModel', filename=openingVisuFile, translation="0 62 65", color="1 0 0 1", scale3d="1 1.2 1")
+                openingVisu.createObject('RigidMapping')
+
+                openingColli = opening.createChild('openingColli')
+                openingColli.createObject('Mesh', position="70 5 0  70 145 0  -70 145 0  -70 5 0", edges="0 1 0 3 0 2 1 2 2 3", triangles="0 1 2 0 2 3")
+                openingColli.createObject('MechanicalObject')
+                openingColli.createObject('Triangle', group="2", bothSide="true")
+                openingColli.createObject('Line', group="2")
+                openingColli.createObject('Point', group="2")
+                openingColli.createObject('RigidMapping')
+
+
+                ###########################################
+                # Manivelle
+                ###########################################
+                manivelle = rootNode.createChild('manivelle')
+                manivelle.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                manivelle.createObject('EulerImplicit')
+                manivelle.createObject('CGLinearSolver', iterations="25", tolerance="1e-5", threshold="1e-5")
+                manivelle.createObject('MechanicalObject', template="Rigid3d", name="MO", position="0 -145 -70 0. 0 0 1",
+                showObject="1",
+                showObjectScale="20",
+                drawMode="2")
+                manivelle.createObject('FixedConstraint', indices="0")
+                manivelle.createObject('UniformMass', totalmass="0.1")
+                manivelle.createObject('UncoupledConstraintCorrection')
+
+                manivelleVisu = manivelle.createChild('manivelleVisu')
+                manivelleVisu.createObject('OglModel', filename=manivelleFile, translation="0 120 70", color="0 0 0 1")
+                manivelleVisu.createObject('RigidMapping')
+
+
+                ###########################################
+                # Environment
+                ###########################################
+                Environment = rootNode.createChild('Environment')
+                Environment.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                Environment.createObject('OglModel', putOnlyTexCoords='true', fileMesh=cycloVisu, name='decor', normals='0', scale='300', rotation="0 -90 0", translation="5 -225 40")
+                Environment.createObject('OglShader', fileVertexShaders="['shaders/shaderLibrary.glsl']", fileFragmentShaders="['shaders/shaderLibrary.glsl']")
+                Environment.createObject('OglFloat3Variable', name='AmbientColor', value='1.0 1.0 1.0')
+                Environment.createObject('OglFloat3Variable', name='DiffuseColor', value='0.8 0.8 0.8')
+                Environment.createObject('OglFloat3Variable', name='SpecularColor', value='1 1 1')
+                Environment.createObject('OglFloatVariable', name='SpecularRoughness', value='0.25')
+                Environment.createObject('OglFloatVariable', name='SpecularReflectance', value='0.05')
+                Environment.createObject('OglShaderDefineMacro', id='DiffuseMap_Present')
+                Environment.createObject('OglTexture', textureUnit='2', repeat='true', name='color', srgbColorspace='false', id='DiffuseMap', textureFilename=textureCyclo)
+
+                return rootNode

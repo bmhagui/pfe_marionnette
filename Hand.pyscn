@@ -1,0 +1,176 @@
+
+import Sofa
+
+import os
+path = os.path.dirname(os.path.abspath(__file__))
+meshRobot     = path+'/mesh/Hand/hand.vtk'
+meshRobotVisu = path+'/mesh/Hand/hand.stl'
+
+def createScene(rootNode):
+
+ 	  	# Root node
+                rootNode.findData('dt').value=1
+                rootNode.findData('gravity').value='0 0 -9810'
+                rootNode.createObject('VisualStyle', displayFlags='showVisualModels showBehaviorModels showCollisionModels hideBoundingCollisionModels showForceFields showInteractionForceFields hideWireframe')
+
+		#rootNode.createObject('OglGrid', size="100", nbSubdiv=10)
+
+		#Required plugin
+                rootNode.createObject('RequiredPlugin', pluginName='SoftRobots')
+                rootNode.createObject('RequiredPlugin', pluginName='SofaPython')
+
+                rootNode.createObject('FreeMotionAnimationLoop')
+                rootNode.createObject('CollisionPipeline', verbose='0')
+                rootNode.createObject('BruteForceDetection', name='N2')
+                rootNode.createObject('CollisionResponse', response='FrictionContact')
+                rootNode.createObject('LocalMinDistance', name="Proximity", alarmDistance='3', contactDistance='0.5')
+
+                rootNode.createObject('QPInverseProblemSolver', printLog='0')
+                #rootNode.createObject('GenericConstraintSolver')
+
+                rootNode.createObject('PythonScriptController', filename=path+"/tracking/Hand/hand_controller.py", classname="controller")
+                rootNode.createObject('BackgroundSetting', color='0 0.168627 0.211765')
+                rootNode.createObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+
+		        #goal
+                goal = rootNode.createChild('goal')
+                goal.createObject('MechanicalObject', name='goalMO',
+                    showObject="1",
+                    showObjectScale="5",
+                    drawMode="1",
+                    position=(
+                    '15 -7.5 110   15 -7.5 50 '+ #Middle
+                    '15 12.5 90    15 12.5 40 '+ #Index
+                    '15 -47.5 60   15 -47.5 10 '+ #Pinky
+                    '15 -27.5 90   15 -27.5 40 '+ #Ring
+                    '45.635 27.0 -5.4  ' #Thumb
+                        ))
+
+                #palmPosition
+                palmPosition = rootNode.createChild('palmPosition')
+                goal.createObject('MechanicalObject', name='goalMO',
+                    showObject="1",
+                    showObjectScale="5",
+                    drawMode="1",
+                    position="7.5 -15 -40")
+
+
+
+                #hand
+                hand = rootNode.createChild('hand')
+                hand.createObject('EulerImplicitSolver', rayleighMass="0.1", rayleighStiffness="0.1")
+                hand.createObject('SparseLDLSolver')
+                hand.createObject('MeshVTKLoader', name="loader", filename=meshRobot)
+                hand.createObject('TetrahedronSetTopologyContainer', src="@loader")
+                hand.createObject('TetrahedronSetGeometryAlgorithms', template="Vec3d")
+                hand.createObject('TetrahedronSetTopologyModifier')
+                hand.createObject('TetrahedronSetTopologyAlgorithms', template='Vec3d')
+
+                hand.createObject('MechanicalObject', name="tetras", template="Vec3d")
+                hand.createObject('UniformMass', totalmass="0.2")
+                hand.createObject('TetrahedronFEMForceField', youngModulus="500", poissonRatio='0.45')
+
+                hand.createObject('BoxROI', name="boxROI", box="0 -60 -100 20 20 -80", drawBoxes="true")
+                hand.createObject('RestShapeSpringsForceField', points="@boxROI.indices", stiffness="1e12")
+                # hand.createObject('FixedConstraint', indices="@boxROI.indices")
+
+                hand.createObject('LinearSolverConstraintCorrection')
+
+
+                #hand/visual
+                visu = hand.createChild('visual')
+                visu.createObject('MeshSTLLoader', name='loader', filename=meshRobotVisu)
+                visu.createObject('Mesh', name='mesh', src='@loader')
+                visu.createObject('OglModel', template='ExtVec3f')
+                visu.createObject('BarycentricMapping')
+
+
+                #hand/effector
+                effector = hand.createChild('effector')
+                effector.createObject('MechanicalObject', name="effectorPoint",
+                    position=(
+                    '3 -7.5 110   3 -7.5 50 '+ #Middle
+                    '3 12.5 90    3 12.5 40 '+ #Index
+                    '3 -47.5 60   3 -47.5 10 '+ #Pinky
+                    '3 -27.5 90   3 -27.5 40 '+ #Ring
+                    '45.635 37.0 -5.4  ' #Thumb
+                        ))
+                effector.createObject('PositionEffector', indices=range(0,9), effectorGoal="@../../goal/goalMO.position", axis='1 1 1')
+                effector.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+                #hand/actuator/middle
+                actuator1 = hand.createChild('actuator1')
+                actuator1.createObject('MechanicalObject', name="actuator1",
+				      position="3 -12 -20    3 -12 -10    10 -12 10   10 -12 30   10 -12 45    10 -12 55    10 -12 80    10 -12 90  \
+						3 -3  -20    3 -3  -10    10 -3  10   10 -3  30   10 -3  45    10 -3  55    10 -3  80    10 -3  90 \
+						10 -7.5 -20    10 -7.5 -10  ")
+
+                actuator1.createObject('CableActuator',  indices='0 1 2 3 4 5 6 7',       pullPoint="3 -12 -100",   maxPositiveDisp='30', minForce="0")
+                actuator1.createObject('CableActuator',  indices='8 9 10 11 12 13 14 15', pullPoint="3 -3 -100",    maxPositiveDisp='30', minForce="0")
+                actuator1.createObject('CableActuator',  indices='16 17 ',           pullPoint="10 -7.5 -100",   maxPositiveDisp='30', minForce="0")
+
+                actuator1.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+                #hand/actuator/index
+                actuator2 = hand.createChild('actuator2')
+                actuator2.createObject('MechanicalObject', name="actuator2",
+				      position="3 -12 -20    3 -12 -10    10 -12 10   10 -12 35   10 -12 45    10 -12 60    10 -12 70    10 -12 80      \
+						3 -3  -20    3 -3  -10    10 -3  10   10 -3  35   10 -3  45    10 -3  60    10 -3  70    10 -3  80     \
+						10 -7.5 -20    10 -7.5 -10   ", translation="0 20 0")
+
+                actuator2.createObject('CableActuator',  indices='0 1 2 3 4 5 6 7',       pullPoint="3 8 -100",   maxPositiveDisp='30', minForce="0")
+                actuator2.createObject('CableActuator',  indices='8 9 10 11 12 13 14 15', pullPoint="3 17 -100",    maxPositiveDisp='30', minForce="0")
+                actuator2.createObject('CableActuator',  indices='16 17',           pullPoint="10 12.5 -100",   maxPositiveDisp='30', minForce="0")
+                actuator2.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+                #hand/actuator/pinky
+                actuator3 = hand.createChild('actuator3')
+                actuator3.createObject('MechanicalObject', name="actuator3",
+				      position="3 -12 -20    3 -12 -10    10 -12 5   10 -12 15   10 -12 30   10 -12 40       \
+						3 -3  -20    3 -3  -10    10 -3  5   10 -3  15   10 -3  30   10 -3  40       \
+						10 -7.5 -20    10 -7.5 -10 ", translation="0 -40 0")
+
+                actuator3.createObject('CableActuator',  indices='0 1 2 3 4 5',       pullPoint="3 -52 -100",   maxPositiveDisp='30', minForce="0")
+                actuator3.createObject('CableActuator',  indices='6 7 8 9 10 11', pullPoint="3 -43 -100",    maxPositiveDisp='30', minForce="0")
+                actuator3.createObject('CableActuator',  indices='12 13',        pullPoint="10 -47.5 -100",   maxPositiveDisp='30', minForce="0")
+                actuator3.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+                #hand/actuator/ring
+                actuator4 = hand.createChild('actuator4')
+                actuator4.createObject('MechanicalObject', name="actuator4",
+				      position="3 -12 -20    3 -12 -10    10 -12 10   10 -12 35   10 -12 45    10 -12 70    10 -12 80    10 -12 90  \
+						3 -3  -20    3 -3  -10    10 -3  10   10 -3  35   10 -3  45    10 -3  70    10 -3  80    10 -3  90 \
+						10 -7.5 -20    10 -7.5 -10 ", translation="0 -20 0")
+
+                actuator4.createObject('CableActuator',  indices='0 1 2 3 4 5 6 7',       pullPoint="3 -32 -100",   maxPositiveDisp='30', minForce="0")
+                actuator4.createObject('CableActuator',  indices='8 9 10 11 12 13 14 15', pullPoint="3 -23 -100",    maxPositiveDisp='30', minForce="0")
+                actuator4.createObject('CableActuator',  indices='16 17',        pullPoint="10 -27.5 -100",   maxPositiveDisp='30', minForce="0")
+                actuator4.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+                #hand/actuator/thumb
+                actuator5 = hand.createChild('actuator5')
+                actuator5.createObject('MechanicalObject', name="actuator5",
+                                      position="17 28 -80    32.2858333333 28.3333333333 -37.81   36.1708333333 28.3333333333 -23.32     \
+                                                27 28 -80    39.5308333333 28.3333333333 -39.87   43.4158333333 28.3333333333 -25.38     \
+                                                ")
+
+                actuator5.createObject('CableActuator',  indices='0 1 2',       pullPoint="17 28 -100",    maxPositiveDisp='30', minForce="0")
+                actuator5.createObject('CableActuator',  indices='3 4 5',       pullPoint="27 28 -100",    maxPositiveDisp='30', minForce="0")
+                actuator5.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+                ##########################################
+                # Contact                                #
+                ##########################################
+                #fingerContact = hand.createChild('contact')
+                #fingerContact.createObject('MeshSTLLoader', name='loader', filename=meshRobotVisu)
+                #fingerContact.createObject('Mesh', src='@loader')
+                #fingerContact.createObject('MechanicalObject')
+                #fingerContact.createObject('TTriangleModel', group="3", selfCollision="1")
+                #fingerContact.createObject('TLineModel', group="3", selfCollision="1")
+                #fingerContact.createObject('TPointModel', group="3", selfCollision="1")
+                #fingerContact.createObject('BarycentricMapping')
+
+		return rootNode

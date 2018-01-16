@@ -1,0 +1,85 @@
+# -*- coding: utf-8 -*-
+
+import Sofa
+
+import os
+path = os.path.dirname(os.path.abspath(__file__))+'/mesh/JackInTheBox/'
+
+GPU=0
+
+volumeFile = path+'bodyArmHead.vtk'
+visuFile = path+'body.obj'
+colliFile = path+'bodyColli.stl'
+headFile = path+'HarleyQuinnCollerette.obj'
+handRFile = path+'handRight.obj'
+handLFile = path+'handLeft.obj'
+
+armColliFile1 = path+'armCollision_1.stl'
+armColliFile2 = path+'armCollision_2.stl'
+armColliFile3 = path+'armCollision_3.stl'
+
+boxFile = path+'theBox.obj'
+manivelleFile = path+'manivelle.obj'
+
+openingVisuFile = path+'opening.obj'
+openingColliFile = path+'openingCollision.stl'
+
+cycloVisu = path+'../BabyGroot/Cyclo.obj'
+textureCyclo = path+'../BabyGroot/Cyclo_Diffuse_Map.png'
+
+def createScene(rootNode):
+
+                rootNode.createObject('RequiredPlugin', pluginName='SoftRobots')
+
+
+                rootNode.createObject('VisualStyle', displayFlags="showVisualModels hideBehaviorModels hideCollisionModels \
+                                        hideBoundingCollisionModels hideForceFields hideInteractionForceFields hideWireframe")
+
+
+                rootNode.createObject('BackgroundSetting', color='0 0.168627 0.211765')
+                rootNode.createObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+
+                rootNode.findData('gravity').value="0 -9810.0 0"
+                rootNode.findData('dt').value=0.04
+
+                ##########################################
+                # Serial Port                            #
+                ##########################################
+                rootNode.createObject('PythonScriptController', classname="controller", filename=path+"../../controller/TestPotarController.py")
+                rootNode.createObject('SerialPortBridgeGeneric', name="serial", receive="1", port="/dev/ttyACM0", baudRate="115200", size="13", listening="true")
+
+
+                boxVisu = rootNode.createChild('boxVisu')
+                boxVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                boxVisu.createObject('OglModel', filename=boxFile, translation="0 -26.5 0")
+
+                ###########################################
+                # Opening
+                ###########################################
+                opening = rootNode.createChild('opening')
+                opening.createObject('EulerImplicit')
+                opening.createObject('CGLinearSolver', iterations="25", tolerance="1e-5", threshold="1e-5")
+                opening.createObject('MechanicalObject', template="Rigid3d", name="MO", position="0 -70 -70 0. 0 0 1",
+                showObject="0",
+                showObjectScale="20",
+                drawMode="2")
+                opening.createObject('FixedConstraint', indices="0")
+                opening.createObject('UniformMass', totalmass="0.1")
+                opening.createObject('UncoupledConstraintCorrection')
+
+                openingVisu = opening.createChild('openingVisu')
+                openingVisu.createObject('VisualStyle', displayFlags="showVisualModels hideWireframe")
+                openingVisu.createObject('OglModel', filename=openingVisuFile, translation="0 62 65", color="1 0 0 1", scale3d="1 1.2 1")
+                openingVisu.createObject('RigidMapping')
+
+                openingColli = opening.createChild('openingColli')
+                openingColli.createObject('Mesh', position="70 5 0  70 145 0  -70 145 0  -70 5 0", edges="0 1 0 3 0 2 1 2 2 3", triangles="0 1 2 0 2 3")
+                openingColli.createObject('MechanicalObject')
+                openingColli.createObject('Triangle', group="2", bothSide="true")
+                openingColli.createObject('Line', group="2")
+                openingColli.createObject('Point', group="2")
+                openingColli.createObject('RigidMapping')
+
+
+
+                return rootNode

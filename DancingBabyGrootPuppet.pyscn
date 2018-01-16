@@ -1,0 +1,262 @@
+# -*- coding: utf-8 -*-
+
+import Sofa
+
+import os
+
+#GLOBAL VARIABLES
+path = os.path.dirname(os.path.abspath(__file__))
+meshRobot     = path+'/mesh/BabyGroot/babyGroot_smoothHead.vtu'
+meshRobotVisu = path+'/mesh/BabyGroot/babyGroot.stl'
+meshRobotVisuOBJ = path+'/mesh/BabyGroot/Baby_Groot_Registered.obj'
+cycloVisu = path+'/mesh/BabyGroot/Cyclo.obj'
+potVisu       = path+'/mesh/BabyGroot/babyGroot_pot.stl'
+
+textureGroot = path+'/mesh/BabyGroot/Baby_Groot_Diffuse_2048.png'
+textureCyclo = path+'/mesh/BabyGroot/Cyclo_Diffuse_Map.png'
+
+GPU = 0
+
+
+# Scene en millimetre avec un objet de 20cm sur 40cm
+# Volume 231762.734375 mm3
+# Young modulus 200 N/mm2 -> 200 000 000Pa
+# Densite 0.8 g/cm3 -> 8e-7 kg/mm3
+# Poids -> 0.185 kg
+
+
+def createScene(rootNode):
+
+ 	  # Root node
+                rootNode.findData('gravity').value='0 0 -9810'
+                rootNode.createObject('VisualStyle', displayFlags='showVisualModels hideBehaviorModels showCollisionModels hideBoundingCollisionModels hideForceFields showInteractionForceFields hideWireframe')
+
+                rootNode.createObject('BackgroundSetting', color='0 0.168627 0.211765')
+                rootNode.createObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+                # rootNode.createObject('LightManager', shadows='1', softShadows='1')
+
+                # sd = 20/1.25
+                # rootNode.createObject('OglGrid', size="1000", nbSubdiv=sd, plane="z", translation="0 0 501")
+                # rootNode.createObject('OglGrid', size="1000", nbSubdiv=sd, plane="z")
+                # rootNode.createObject('OglGrid', size="1000", nbSubdiv=sd, plane="x")
+                # rootNode.createObject('OglGrid', size="1000", nbSubdiv=sd, plane="y")
+
+                # center = rootNode.createChild('centerPlatform')
+                # center.createObject('MechanicalObject', position="0 0 500")
+                # center.createObject('SphereModel', radius="5")
+
+                rootNode.createObject('RequiredPlugin', pluginName='SoftRobots')
+                if GPU:
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDA')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaAsyncSolvers')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDASolvers')
+
+                rootNode.createObject('FreeMotionMasterSolver')
+                rootNode.createObject('QPInverseProblemSolver', printLog='0', epsilon="1e-3")
+                # rootNode.createObject('GenericConstraintSolver')
+
+                ##########################################
+                # Serial Port                            #
+                ##########################################
+                # rootNode.createObject('SerialPortBridgeGeneric', name="serial", port="/dev/ttyACM0", baudRate="115200", size="13", listening="true")
+
+                #########################################
+                # Python script controller              #
+                #########################################
+                # rootNode.createObject('PythonScriptController', classname="controller", filename=path+"/controller/BabyGrootController.py")
+
+                #########################################
+                # Goal                                  #
+                #########################################
+                trajectory = rootNode.createChild('trajectory')
+                trajectory.createObject('MechanicalObject', name='ArticulatedObject', template="Vec1d")
+
+                dof = trajectory.createChild('dof')
+                dof.createObject('MechanicalObject', name='dof', template='Rigid')
+                dof.createObject('UniformMass', mass='1.28 0.1 [1 0 0 0 1 0 0 0 1]', showAxisSizeFactor='10')
+                dof.createObject('ArticulatedSystemMapping', input1="@../ArticulatedObject", output="@dof")
+
+                goal = dof.createChild('goal')
+                goal.createObject('MechanicalObject', name='goalMO', template='Vec3d', position="0 0 0  0 0 0  0 0 0  0 0 0  0 0 0 \
+                0 0 0  0 0 0  0 0 0  0 0 0  0 0 0 \
+                0 0 0  0 0 0  0 0 0  0 0 0  0 0 0 \
+                0 0 0  0 0 0  0 0 0  0 0 0  0 0 0 \
+                0 0 0  0 0 0  0 0 0  0 0 0  0 0 0 \
+                0 0 0  0 0 0  ",
+                showObject="1",
+                drawMode="1",
+                showObjectScale="5")
+                goal.createObject('UniformMass', mass='1.28 0.1 [1 0 0 0 1 0 0 0 1]', showAxisSizeFactor='10')
+                # goal.createObject('SphereModel', radius="5")
+                goal.createObject('RigidMapping', rigidIndexPerPoint = range(0,27))
+                # goal.createObject('WriteState', filename="state.txt", time="0.01")
+
+                trajectory.createObject('ArticulatedHierarchyContainer', filename=path+"/trajectory/Groot_Siggraph_Puppet_Movie.bvh")
+                trajectory.createObject('ArticulatedHierarchyBVHController')
+
+
+                #########################################
+                # FEM                                   #
+                #########################################
+                babyGroot = rootNode.createChild('babyGroot')
+                babyGroot.createObject('EulerImplicitSolver', rayleighMass="0.1", rayleighStiffness="0.1")
+
+                if GPU:
+                    babyGroot.createObject('ShewchukPCGLinearSolver', iterations='25', name='linearSolver', preconditioners='precond', use_precond="true", use_first_precond="true", update_step="1", tolerance='1.0e-9')
+                    babyGroot.createObject('CudaSparseLDLSolver', name='precond', template="AsyncCompressedRowSparseMatrix3f", useMultiThread="true")
+                else:
+                    babyGroot.createObject('PCGLinearSolver', name='linearSolver',iterations='200', tolerance='1.0e-18', preconditioners="precond")
+                    babyGroot.createObject('SparseLDLSolver', name='precond')
+
+                babyGroot.createObject('MeshVTKLoader', name="loader", filename=meshRobot, rotation="90 0 0", translation="-100 50 -50")
+                babyGroot.createObject('TetrahedronSetTopologyContainer', src="@loader")
+                babyGroot.createObject('TetrahedronSetGeometryAlgorithms', template="Vec3d")
+                babyGroot.createObject('TetrahedronSetTopologyModifier')
+                babyGroot.createObject('TetrahedronSetTopologyAlgorithms', template='Vec3d')
+
+                babyGroot.createObject('MechanicalObject', name="tetras", template="Vec3d", showIndices="false", showIndicesScale="4e-5")
+                babyGroot.createObject('UniformMass', totalmass="0.200")
+                yM = 350
+                babyGroot.createObject('TetrahedronFEMForceField', youngModulus=yM)
+
+                babyGroot.createObject('BoxROI', name="boxROI", box="0 -50 0 50 20 75", drawBoxes="true")
+                babyGroot.createObject('FixedConstraint', indices="@boxROI.indices")
+
+                babyGroot.createObject('GenericConstraintCorrection', name='GCS', solverName='precond')
+
+
+                #########################################
+                # Hand loads                            #
+                #########################################
+                loads = babyGroot.createChild('loads')
+                loads.createObject('MechanicalObject', position=" 50 -15 285     -85 -10 170 ")
+                loads.createObject('UniformMass', mass="0.024")
+                loads.createObject('BarycentricMapping', mapForces="0", mapMasses="1")
+
+
+                #########################################
+                # Pot visual                            #
+                #########################################
+                # pot = rootNode.createChild('visual')
+                # pot.createObject('MeshSTLLoader', name='loader', filename=potVisu, scale='300', rotation="90 0 0", translation="-100 50 -50")
+                # pot.createObject('Mesh', name='mesh', src='@loader')
+                # pot.createObject('OglModel', template='ExtVec3f', color='0.3 0.3 0.3 1.')
+
+
+                #########################################
+                # BabyGroot visual                      #
+                #########################################
+                visu = babyGroot.createChild('visual')
+                # visu.createObject('MeshSTLLoader', name='loader', filename=meshRobotVisu, scale='300', rotation="90 0 0", translation="-100 50 -50")
+                # visu.createObject('Mesh', name='mesh', src='@loader')
+                # visu.createObject('OglModel', template='ExtVec3f', color='0.6 0.6 0.14 1.')
+                # visu.createObject('BarycentricMapping')
+                visu.createObject('OglModel', putOnlyTexCoords='true', fileMesh=meshRobotVisuOBJ, name='IamGroot_visu', normals='0', scale='300', rotation="90 0 180", translation="-5 -10 -40")
+                visu.createObject('OglShader', fileVertexShaders="['shaders/shaderLibrary.glsl']", fileFragmentShaders="['shaders/shaderLibrary.glsl']")
+                visu.createObject('OglFloat3Variable', name='AmbientColor', value='0.4 0.4 0.4')
+                visu.createObject('OglFloat3Variable', name='DiffuseColor', value='1.0 1.0 1.0')
+                visu.createObject('OglFloat3Variable', name='SpecularColor', value='0.2 0.2 0.2')
+                visu.createObject('OglFloatVariable', name='SpecularRoughness', value='0.25')
+                visu.createObject('OglFloatVariable', name='SpecularReflectance', value='0.05')
+                visu.createObject('OglFloat3Variable', name='LightColor', value='1 1 1')
+                visu.createObject('OglFloat3Variable', name='LightPosition', value='-200 100 -200')
+                visu.createObject('OglFloat3Variable', name='LightDirection', value='1 0 1')
+                visu.createObject('OglShaderDefineMacro', id='DiffuseMap_Present')
+                visu.createObject('OglTexture', textureUnit='1', repeat='true', name='color', srgbColorspace='false', id='DiffuseMap', textureFilename=textureGroot)
+                visu.createObject('BarycentricMapping')
+
+                Environment = rootNode.createChild('Environment')
+                Environment.createObject('OglModel', putOnlyTexCoords='true', fileMesh=cycloVisu, name='decor', normals='0', scale='300', rotation="90 0 180", translation="-5 -10 -40")
+                Environment.createObject('OglShader', fileVertexShaders="['shaders/shaderLibrary.glsl']", fileFragmentShaders="['shaders/shaderLibrary.glsl']")
+                Environment.createObject('OglFloat3Variable', name='AmbientColor', value='1.0 1.0 1.0')
+                Environment.createObject('OglFloat3Variable', name='DiffuseColor', value='0.8 0.8 0.8')
+                Environment.createObject('OglFloat3Variable', name='SpecularColor', value='1 1 1')
+                Environment.createObject('OglFloatVariable', name='SpecularRoughness', value='0.25')
+                Environment.createObject('OglFloatVariable', name='SpecularReflectance', value='0.05')
+                Environment.createObject('OglShaderDefineMacro', id='DiffuseMap_Present')
+                Environment.createObject('OglTexture', textureUnit='2', repeat='true', name='color', srgbColorspace='false', id='DiffuseMap', textureFilename=textureCyclo)
+
+
+                #########################################
+                # Platform                              #
+                #########################################
+                platform = rootNode.createChild('platform')
+                platform.createObject('EulerImplicit', firstOrder='1')
+                platform.createObject('CGLinearSolver', iterations='100')
+                platform.createObject('MechanicalObject', showObject="1", showObjectScale="1", template="Rigid", name="meca", position="0 0 500 0 0 0 1")
+                platform.createObject('UniformMass', totalmass='0.2')
+                platform.createObject('PartialFixedConstraint', fixedDirections="1 1 1 1 1 1")
+                platform.createObject('UncoupledConstraintCorrection')
+
+                # platformMapping = platform.createChild('platformMapping')
+                # platformMapping.createObject('MechanicalObject', showObject="1", showObjectScale="10",  template="Vec3d", name="meca", position="")
+                # platformMapping.createObject('RigidMapping')
+
+                platformVisu = platform.createChild('platformVisu')
+                platformVisu.createObject('MeshSTLLoader', name="mesh", filename=path+'/mesh/Legs/ground.stl', scale3d="200 50 350", translation="300 0 0", rotation="90 0 0")
+                platformVisu.createObject('Mesh', src="@mesh")
+                platformVisu.createObject('OglModel', src="@mesh", color="0.9 0.9 0.9 ")
+                platformVisu.createObject('OglShader', fileVertexShaders="['shaders/shaderLibrary.glsl']", fileFragmentShaders="['shaders/shaderLibrary.glsl']")
+                platformVisu.createObject('OglFloat3Variable', name='AmbientColor', value='0.0 0.0 0.0')
+                platformVisu.createObject('OglFloat3Variable', name='DiffuseColor', value='1.0 1.0 1.0')
+                platformVisu.createObject('OglFloat3Variable', name='SpecularColor', value='0.2 0.2 0.2')
+                platformVisu.createObject('OglFloatVariable', name='SpecularRoughness', value='0.25')
+                platformVisu.createObject('OglFloatVariable', name='SpecularReflectance', value='0.05')
+                platformVisu.createObject('OglFloat3Variable', name='LightColor', value='1 1 1')
+                platformVisu.createObject('OglFloat3Variable', name='LightPosition', value='-200 100 -200')
+                platformVisu.createObject('OglFloat3Variable', name='LightDirection', value='1 0 1')
+                platformVisu.createObject('RigidMapping')
+
+
+                #########################################
+                # Effector                              #
+                #########################################
+                effector = babyGroot.createChild('effector')
+                effector.createObject('VisualStyle', displayFlags="hideInteractionForceFields")
+                effector.createObject('MechanicalObject', name="effectorPoint",
+                      position="0 0 0    26.2334 -19.234 -30.0015        20.4079 -15.2687 72.0313    34.4575 -10.4884 125.362 "+
+                      "14.5824 -11.3035 174.064     7.26955 -9.68917 211.682         33.6977 -12.5701 210.528 "+
+                      "66.6353  -7.8225  237.498     55.1706  -13.8911 274.243 "+
+                      "65.4986 -12.0337 302.579    0 0 0    7.26955 -9.68917 211.682    \
+                         -8.30167 -9.88759 213.45    -35.608 -10.7162 180.025    -67.453 -9.83021 178.416 \
+                          -81.1054 -13.3918 166.089    0 0 0    7.26955 -9.68917 211.682 \
+                          9.67361 -13.8005 234.869     -1.13481 -18.6365 263.38    0 0 0 \
+                           -1.13481 -18.6365 263.38    19.0503 -24.814 269.278    0 0 0 \
+                           -1.13481 -18.6365 263.38    -21.2897 -10.7288 256.775    0 0 0")
+                effector.createObject('PositionEffector', indices=range(0,27), effectorGoal="@../../trajectory/dof/goal/goalMO.position", axis='1 1 1')
+                effector.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+                #########################################
+                # Actuator                              #
+                #########################################
+                actuator = babyGroot.createChild('actuator')
+                actuator.createObject('MechanicalObject', name="effectorPoint",
+                                      position="-20 -10 265   20 -30 265    -6 12 258     -25 -30 245    0 -35 240 \
+                                      45 -10 125    40 0 130    25 -10 125     40 -20 130\
+                                      50 -10 225    50 -15 285    -35 -10 180     -85 -10 170 \
+                                      35 -10 90      35 -10 150    55 -15 280     25 -10 90     25 -10 150     -85 -10 170 \
+                                      0 -10 270 \
+                                      0 -40 245    0 5 245")
+
+                actuator.createObject('CableActuator', name='cable0',   indices='0',  pullPoint="60 90 500",       minForce='0')                     #0 headTop1         #6
+                actuator.createObject('CableActuator', name='cable1',   indices='19', pullPoint="20 90 500",       minForce='0')                     #1 headTop2         #3
+                actuator.createObject('CableActuator', name='cable2',   indices='1',  pullPoint="150 200 500",     minForce='0')  #2 headLeftBehind   #12
+                actuator.createObject('CableActuator', name='cable3',   indices='1',  pullPoint="150 -175 500",    minForce='0')  #3 headLeftFront    #10
+                actuator.createObject('CableActuator', name='cable4',   indices='3',  pullPoint="-50 200 500",     minForce='0')  #4 headRightBehind  #11
+                actuator.createObject('CableActuator', name='cable5',   indices='3',  pullPoint="-50 -200 500",    minForce='0')  #5 headRightFront   #2
+
+                actuator.createObject('CableActuator', name='cable6',   indices='10',  pullPoint="80 0.0 500",     minForce='0')  #6 handLeft         #7
+                actuator.createObject('CableActuator', name='cable7',   indices='10',  pullPoint="150 -60 500",    minForce='0')  #7 handLeftBehind   #13
+                actuator.createObject('CableActuator', name='cable8',   indices='10',  pullPoint="120 -200 500",   minForce='0')  #8 handLeftFront    #9
+
+                actuator.createObject('CableActuator', name='cable9',   indices='12', pullPoint="-30 0 500",      minForce='0')   #9 handRight        #4
+                # actuator.createObject('CableActuator', name='cable10',  indices='12', pullPoint="-150 -50 500",   minForce='0') #10 handRightBehind #1
+                actuator.createObject('CableActuator', name='cable11',  indices='12', pullPoint="-150 -200 500",  minForce='0')   #11 handRightFront  #8
+
+                actuator.createObject('CableActuator', name='cable12',  indices='21 20 12', pullPoint="25 200 500", minForce='0') #12 handHeadRight   #5
+
+                actuator.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+		return rootNode

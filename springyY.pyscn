@@ -1,0 +1,153 @@
+# -*- coding: utf-8 -*-
+
+import Sofa
+
+import os
+path = os.path.dirname(os.path.abspath(__file__))+'/mesh/WalkingSpringy/'
+
+GPU=1
+
+version = 'v2'
+
+nbCavity = 3
+if version == 'v3':
+    nbCavity = 4
+
+volumeFile = path+'springyY_'+version+'.vtk'
+visuFile = path+'springyY_'+version+'.stl'
+
+def createScene(rootNode):
+
+                rootNode.createObject('RequiredPlugin', pluginName='SoftRobots')
+
+                if GPU:
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDA')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaAsyncSolvers')
+                    rootNode.createObject('RequiredPlugin', pluginName='SofaCUDASolvers')
+
+                rootNode.createObject('VisualStyle', displayFlags="showVisualModels hideBehaviorModels showCollisionModels \
+                                        hideBoundingCollisionModels hideForceFields showInteractionForceFields hideWireframe")
+
+                rootNode.createObject('FreeMotionAnimationLoop')
+
+                rootNode.createObject('CollisionPipeline', verbose="0")
+                rootNode.createObject('BruteForceDetection', name="N2")
+                rootNode.createObject('CollisionResponse', response="FrictionContact", responseParams="mu=0")
+                rootNode.createObject('LocalMinDistance', name="Proximity", alarmDistance="0", contactDistance="0")
+
+                rootNode.createObject('QPInverseProblemSolver', printLog='0', epsilon="1e0", displayTime="0",
+                maxIterations="1000", tolerance="1e-14")
+                # rootNode.createObject("GenericConstraintSolver", printLog="1")
+
+                rootNode.createObject('BackgroundSetting', color='0 0.168627 0.211765')
+                rootNode.createObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+                rootNode.findData('gravity').value="0 0 -9810.0"
+                # rootNode.createObject('OglGrid', size="10", nbSubdiv="10")
+                rootNode.findData('dt').value=0.01
+
+                ##########################################
+                # Serial Port                            #
+                ##########################################
+                # rootNode.createObject('PythonScriptController', classname="controller", filename=path+"../../controller/AccordionController.py")
+                # rootNode.createObject('SerialPortBridgeGeneric', name="serial", port="/dev/ttyACM0", baudRate="115200", size="4", listening="true")
+
+                ##########################################
+                # Effector goal for interactive control  #
+                ##########################################
+                goal = rootNode.createChild('goal')
+                goal.createObject('EulerImplicit', firstOrder='1')
+                goal.createObject('CGLinearSolver', iterations='100', tolerance="1e-5", threshold="1e-5")
+                goal.createObject('MechanicalObject', name='goalMO', position='0 30 0    70 39.453 0    -70 39.453 0')
+                goal.createObject('Sphere', radius='5', group='3')
+                goal.createObject('AnimationEditor', listening="1", filename="trajectory/Accordion_Animation.txt")
+                goal.createObject('UncoupledConstraintCorrection')
+
+
+                ##########################################
+                # FEM Model                              #
+                ##########################################
+                accordion = rootNode.createChild('accordion')
+                accordion.createObject('EulerImplicit', firstOrder='0', rayleighMass="0.1", rayleighStiffness="0.1")
+                if GPU:
+                    accordion.createObject('ShewchukPCGLinearSolver', iterations='25', name='linearSolver', preconditioners='precond', use_first_precond="true", update_step="1", tolerance='1.0e-9')
+                    accordion.createObject('CudaSparseLDLSolver', name='precond', template="AsyncCompressedRowSparseMatrix3f", useMultiThread="true")
+                else:
+                    accordion.createObject('PCGLinearSolver', name='linearSolver',iterations='200', tolerance='1.0e-18',threshold='1.0e-30', preconditioners="precond")
+                    accordion.createObject('SparseLDLSolver', name='precond')
+
+
+                accordion.createObject('MeshVTKLoader', name='loader', filename=volumeFile, translation="0 -11.547 0")
+                accordion.createObject('TetrahedronSetTopologyContainer', src='@loader')
+                accordion.createObject('TetrahedronSetTopologyModifier')
+                accordion.createObject('TetrahedronSetTopologyAlgorithms', template='Vec3d')
+                accordion.createObject('TetrahedronSetGeometryAlgorithms', template='Vec3d')
+
+                accordion.createObject('MechanicalObject', name='tetras', template='Vec3d')
+                accordion.createObject('UniformMass', totalmass='0.110')
+                accordion.createObject('TetrahedronFEMForceField', template='Vec3d', name='FEM', method='large', poissonRatio='0.3',  youngModulus='500')
+
+                accordion.createObject('BoxROI', name='ROI1', box='-20 -80 -20  20 -70 20', drawBoxes='true')
+                accordion.createObject('RestShapeSpringsForceField', points='@ROI1.indices', stiffness='1e12')
+                # accordion.createObject('FixedConstraint', indices='@ROI1.indices')
+
+                accordion.createObject('GenericConstraintCorrection', name='GCS', solverName='precond')
+
+
+                ##########################################
+                # Effector                               #
+                ##########################################
+
+                effector = accordion.createChild('effector')
+                effector.createObject('MechanicalObject', name="effectorPoint",
+                        # position=("0 0 0   70 39.453 0   -70 39.453 0"))
+                        position="0 20 0   70 39.453 0   -70 39.453 0")
+                effector.createObject('PositionEffector', template='Vec3d',
+                        indices="0 1 2",
+                        effectorGoal="@../../goal/goalMO.position")
+                effector.createObject('BarycentricMapping', mapForces="false", mapMasses="false")
+
+
+                ##########################################
+                # Pressure                               #
+                ##########################################
+                for i in range(1,nbCavity+1):
+                    maxVolumeGrowth = 10000
+                    if i == 4:
+                        maxVolumeGrowth = 20000
+
+                    cavity = accordion.createChild('cavity')
+                    cavity.createObject('MeshSTLLoader', name='loader', filename=path+'cavity'+str(i)+'_v2.stl', translation="0 -11.547 0")
+                    cavity.createObject('Mesh', src='@loader', name='topo')
+                    cavity.createObject('MechanicalObject', name='cavity')
+                    cavity.createObject('SurfacePressureActuator', template='Vec3d', name="pressure",
+                        triangles='@topo.triangles',
+                        minPressure="0",
+                        maxVolumeGrowth=maxVolumeGrowth)
+                    cavity.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+
+                ##########################################
+                # Cable                                  #
+                ##########################################
+                for j in range(1,4):
+                    rz=120*(j-1)
+                    for i in range(1,5):
+                        ry=90*(i-1)
+                        cable = accordion.createChild('cable'+str(i))
+                        cable.createObject('MechanicalObject', position="0. -20 14   0. -33 14   0. -46 14   0. -58 14   0. -70 14", rotation="0 "+str(ry)+" "+str(rz))
+                        cable.createObject('CableActuator', template='Vec3d', name="cable", indices="0 1 2 3 4",
+                            hasPullPoint="0",
+                            minForce="0",
+                            maxPositiveDisp="25")
+                        cable.createObject('BarycentricMapping', name='mapping',  mapForces='false', mapMasses='false')
+
+                ##########################################
+                # Visualization                          #
+                ##########################################
+                accordionVisu = accordion.createChild('visu')
+                accordionVisu.createObject('OglModel', filename=visuFile, translation="0 -11.547 0")
+                accordionVisu.createObject('BarycentricMapping')
+
+
+
+                return rootNode
