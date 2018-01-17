@@ -1,4 +1,3 @@
-#include <Herkulex.h>
 
 #include <Herkulex.h>
 #define PINstep 10

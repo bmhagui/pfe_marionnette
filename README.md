@@ -17,3 +17,7 @@ https://elinux.org/Serial_port_programming
 
 git config --global user.name "bmhagui"
 git config --global user.email "bmhagui@gmail.com"
+
+ddone: http://www.instructables.com/id/Interface-Python-and-Arduino-with-pySerial/
+
+motors herkulex: http://robottini.altervista.org/dongbu-herkulex-arduino-library-2
