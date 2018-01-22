@@ -26,9 +26,11 @@ void setup() {
   Serial.begin(9600);
   // reserve 200 bytes for the inputString:
   inputString.reserve(200);
+  Serial.println("ready");
 }
 
 void loop() {
+  Serial.println("ready");
   // print the string when a newline arrives:
   if (stringComplete) {
     Serial.println(inputString);

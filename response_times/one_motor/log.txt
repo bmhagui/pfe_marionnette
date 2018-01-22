@@ -1,0 +1,12 @@
+Serial available
+3470
+Value read
+3470
+Command sent to motor
+3475
+Serial available
+4469
+Value read
+4469
+Command sent to motor
+4474

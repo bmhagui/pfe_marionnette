@@ -36,16 +36,16 @@ void setup()
 
   for (int i = 1; i < 13; i++)
   {
-    Herkulex.writeRegistryRAM(i, 6, 80);
+//    Herkulex.writeRegistryRAM(i, 6, 80);
     delay(10);
-    Herkulex.moveAllAngle(i, map(positions[i], 0, 255, -75, 75 ), LED_GREEN);
+    Herkulex.moveAllAngle(i+1, map(positions[i], 0, 255, -75, 75 ), LED_GREEN);
     delay(10);
   }
   Herkulex.actionAll(2500);
   delay(2000);
   for (int i = 1; i < 13; i++)
   {
-    Herkulex.moveAllAngle(i, map(positions[i], 0, 255, -150, 150 ), LED_BLUE);
+    Herkulex.moveAllAngle(i+1, map(positions[i], 0, 255, -150, 150 ), LED_BLUE);
     delay(10);
   }
   Herkulex.actionAll(2500);
