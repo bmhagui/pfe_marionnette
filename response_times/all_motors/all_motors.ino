@@ -1,6 +1,7 @@
 #include <Herkulex.h>
 unsigned long time;
-int positions[13] = {100,200,300,400,500,600,700,800,900,1000,650,750,850};
+
+int positions[13] = {0, 0, 0, 0, 0,  0, 0, 0, 0, 0,  0, 0, 0};
 
 void setup() {
   
@@ -18,8 +19,7 @@ void loop() {
     time = millis();
     Serial.println(time);
     
-    char inByte = Serial.read();
-    
+    char inByte = Serial.read(); // read the incoming data
     int i = atoi(&inByte);
     Serial.print("Value read i = ");
     Serial.println(i);
@@ -27,7 +27,7 @@ void loop() {
     Serial.println(time);
     
     
-    Herkulex.moveOne(i, 1000, 2000, LED_BLUE);
+    Herkulex.moveOne(i, 500, 2000, LED_BLUE);
     Serial.println("Command sent to motor");
     time = millis();
     Serial.println(time);  
@@ -35,4 +35,3 @@ void loop() {
   
   //delay(100); // delay for 1/10 of a second
 }
-

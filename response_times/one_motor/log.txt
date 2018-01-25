@@ -1,12 +1,56 @@
-Serial available
-3470
-Value read
-3470
-Command sent to motor
-3475
-Serial available
-4469
-Value read
-4469
-Command sent to motor
-4474
+Sending
+817
+817
+Command sent to motor 1
+Sending
+817
+818
+Command sent to motor 2
+Sending
+849
+855
+Command sent to motor 3
+Sending
+896
+901
+Command sent to motor 4
+Sending
+941
+946
+Command sent to motor 5
+Sending
+987
+992
+Command sent to motor 6
+Sending
+1033
+1039
+Command sent to motor 7
+Sending
+1080
+1087
+Command sent to motor 8
+Sending
+1128
+1134
+Command sent to motor 9
+Sending
+1176
+1182
+Command sent to motor 10
+Sending
+1225
+1231
+Command sent to motor 11
+Sending
+1273
+1281
+Command sent to motor 12
+Sending
+1323
+1329
+Command sent to motor 13
+Action all
+1375
+Action all done
+1398
