@@ -21,3 +21,11 @@ git config --global user.email "bmhagui@gmail.com"
 ddone: http://www.instructables.com/id/Interface-Python-and-Arduino-with-pySerial/
 
 motors herkulex: http://robottini.altervista.org/dongbu-herkulex-arduino-library-2
+
+
+very very useful;
+http://www.eprojectszone.com/how-to-modify-the-pwm-frequency-on-the-arduino-part2timer-1-and-phase-correct-pwm-mode/
+
+https://www.arduino.cc/en/Tutorial/SecretsOfArduinoPWM
+
+https://playground.arduino.cc/Main/TimerPWMCheatsheet
