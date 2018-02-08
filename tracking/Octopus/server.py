@@ -27,7 +27,9 @@ while True:
         hand = hands[0]
 
         fingers = hand.fingers
+#Palm necessity
         palmPosition = hand.palm_position
+        #print(palmPosition[0])
 
         thumbBasis  = fingers[0].bone(0).basis
         indexBasis  = fingers[1].bone(0).basis
@@ -37,7 +39,8 @@ while True:
 
         fingerBasis = [thumbBasis, indexBasis, middleBasis, ringBasis, pinkyBasis]
         directions = [None]*10
-        projections = [None]*10
+        #Was 10 now 11
+        projections = [None]*11
 
         if not fingers.is_empty:
 
@@ -51,6 +54,7 @@ while True:
                 directions[finger.type*2+1] -= finger.bone(0).prev_joint
                 projections[finger.type*2+1] = [dot(fingerBasis[finger.type].z_basis,directions[finger.type*2+1]), dot(fingerBasis[finger.type].y_basis,directions[finger.type*2+1])]
 
+            projections[10] = [palmPosition[0],palmPosition[1]]
             # Send only if all is set
             if projections[0] is not None and \
             projections[1] is not None and \
@@ -61,14 +65,18 @@ while True:
             projections[6] is not None and \
             projections[7] is not None and \
             projections[8] is not None and \
-            projections[9] is not None:
+            projections[9] is not None and \
+            projections[10] is not None:
 
-                output = [[0.,0.]]*10
+                #Palm necessity, 11 tuples instead of 10
+                output = [[0.,0.]]*11
 
                 # output[0] = projections[0].to_float_array()
                 for i in range(0,10):
                     output[i] = projections[i]
-
+                output[10] = projections[10]
+                #print("X AND Z")
+                #print(output[10])
                 socket.send_pyobj(output)
 
             else:

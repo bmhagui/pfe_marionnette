@@ -4,7 +4,7 @@ int positions[13];
 
 void setup() {
   
-  Serial.begin(50200); // set the baud rate
+  Serial.begin(9600); // set the baud rate
   Herkulex.begin(57600, 12, 11);
   Herkulex.initialize();
   

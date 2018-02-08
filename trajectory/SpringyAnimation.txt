@@ -1,0 +1,5 @@
+Type: Vec3d
+Number of frame: 1
+Number of effector: 2
+KeyFrames: 0
+50 90 0 50 180 0 

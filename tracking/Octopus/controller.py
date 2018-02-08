@@ -11,6 +11,9 @@ import client
 import OEFilter
 import numpy
 
+#not knowing exactly how to declare this variable i copied an example of its output directly here
+vectors = [[-81.78688453032714, -10.030105285621403], [-40.42666818657426, -4.488696568622572], [-132.68883010553, -26.749611019009933], [-105.36756937060994, -7.429289505070926], [-136.5476281326214, -30.676860740565814], [-105.93635280363443, -7.851018623220909], [-120.41396128158749, -39.624958283022124], [-95.98480002330604, -10.732104038401644], [-99.22794903542126, -33.00832086773289], [-82.46493001454746, -9.149439608040666], [-73.55854797363281, 199.37928771972656]]
+
 
 def norm(x):
     norm = 0
@@ -76,7 +79,6 @@ def inverseRotate(v,q):
 
 
 class controller(Sofa.PythonScriptController):
-
 
 
     def initGraph(self, node):
@@ -189,7 +191,9 @@ class controller(Sofa.PythonScriptController):
 
             ### Get the reply.
             self.clientREQ.socket.send('Request!')
+            global vectors
             vectors = self.clientREQ.socket.recv_pyobj()
+            #print(vectors)
 
 
             if not isinstance(vectors, int):
@@ -209,7 +213,7 @@ class controller(Sofa.PythonScriptController):
                     v1   = [vector1[0],vector1[1],vector1[2]]
                     v2   = [vector2[0],vector2[1],vector2[2]]
  	 	    #print (vector1[2])
-		    print (vector2[2])
+		    #print (vector2[2])
 
                     ### Apply displacement to goal position
                     position1 = numpy.ndarray(3, numpy.double)
@@ -240,7 +244,7 @@ class controller(Sofa.PythonScriptController):
                     positions[i*2+2][1] = filteredPosition2
                     positions[i*2+2][2] = filteredPosition3
 
-                    self.node.getChild('filteredGoal').getObject('goalMO').findData('position').value = positions
+                    self.node.getChild('filteredGoal').getObject('goalMO').findData('position').value = positions            
 
 
 
@@ -268,7 +272,7 @@ class controller(Sofa.PythonScriptController):
         cableTentacleIn4 = self.node.getChild('octopus').getChild('actuatorTentacle3').getObject("cable13").findData('displacement').value
         cableTentacleIn5 = self.node.getChild('octopus').getChild('actuatorTentacle1').getObject("cable11").findData('displacement').value
 
-        outputVector = [cableTentacleIn1 + 1.7 ,
+        outputVector = [cableTentacleIn1 + 1.7  ,
                         cableTentacleIn2 + 0.4 ,
                         cableTentacleIn3 - 2 ,
                         cableTentacleIn4 + -2 ,
@@ -280,17 +284,56 @@ class controller(Sofa.PythonScriptController):
                         cableTentacleOut3 + 8,
                         cableTentacleOut4 + 8,
                         cableTentacleOut5 + 23.3,
+                        0,
+                        0,
                         ]
+        
+        
+        if type(vectors) is list:
+            #this condition is just to test that the hand is in the range of the leapmotion
+            
+            #Treating the z axis values, starting at 150mm from the leapmtion to leave space for the hand to
+            #move without getting out of range, after 400 its far enough and should be considered at max=>250
+            if vectors[10][1] <= 150:
+                outputVector[12] = 0
+            elif vectors[10][1] >= 400:
+                outputVector[12] = 250
+            else:
+                outputVector[12] = vectors[10][1]-150
+
+            #if it is then we will manually map the x axis values on the 18 cm range the platform can move 
+            if vectors[10][0] <= -200:
+                outputVector[13] = 4
+            elif vectors[10][0] > -200 and vectors[10][0] <= -150:
+                outputVector[13] = 6
+            elif vectors[10][0] > -150 and vectors[10][0] <= -100:
+                outputVector[13] = 8
+            elif vectors[10][0] > -100 and vectors[10][0] <= -50:
+                outputVector[13] = 10
+            elif vectors[10][0] > -50 and vectors[10][0] <= 0:
+                outputVector[13] = 12
+            elif vectors[10][0] > 0 and vectors[10][0] <= 50:
+                outputVector[13] = 14
+            elif vectors[10][0] > 50 and vectors[10][0] <= 100:
+                outputVector[13] = 16
+            elif vectors[10][0] > 100 and vectors[10][0] <= 150:
+                outputVector[13] = 18
+            elif vectors[10][0] > 150 and vectors[10][0] <= 200:
+                outputVector[13] = 20
+            elif vectors[10][0] > 200:
+                outputVector[13] = 22
 
 
         for i in range(0,12):
             if outputVector[i] < 0:
                 outputVector[i] = 0
             outputVector[i] = 255/116*outputVector[i]
+            #adding an offset to compensate for lifting the robot
+            outputVector[i] += (outputVector[12])
             if outputVector[i] > 250:
                 outputVector[i] = 250
 
-        print outputVector
+        #print outputVector
         #Cable entre -19 et 115
 
         self.node.getObject('serial').findData('sentData').value = outputVector

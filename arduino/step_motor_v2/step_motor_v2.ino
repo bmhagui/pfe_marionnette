@@ -1,22 +1,24 @@
 #define PINstep 10
-#define PINdir 8
-const int periode = 510;
+#define PINdir 9
+const int periode = 70;
 int i;
 
 void setup()
 {
   Serial.begin(9600);
   OCR1A = periode;
-  //TCCR1B = TCCR1B & 0b11111000 | 0x12;
-  TCCR1B = 0b00010001;
+  TCCR1B = TCCR1B & 0b11111000 | 0x12;
+  //TCCR1B = 0b00010001;
   pinMode (PINdir, OUTPUT);
   analogWrite(PINstep,0);
+  
+
 
 }
 
 void loop()
 {
-  while (Serial.available()<=0){}
+  //while (Serial.available()<=0){}
   i = Serial.read();
   Serial.println(i);
   
