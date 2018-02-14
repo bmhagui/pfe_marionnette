@@ -13,7 +13,9 @@ import numpy
 
 #not knowing exactly how to declare this variable i copied an example of its output directly here
 vectors = [[-81.78688453032714, -10.030105285621403], [-40.42666818657426, -4.488696568622572], [-132.68883010553, -26.749611019009933], [-105.36756937060994, -7.429289505070926], [-136.5476281326214, -30.676860740565814], [-105.93635280363443, -7.851018623220909], [-120.41396128158749, -39.624958283022124], [-95.98480002330604, -10.732104038401644], [-99.22794903542126, -33.00832086773289], [-82.46493001454746, -9.149439608040666], [-73.55854797363281, 199.37928771972656]]
-
+lastValueZ = 0
+interZ = 0
+alpha = 0.1
 
 def norm(x):
     norm = 0
@@ -295,32 +297,25 @@ class controller(Sofa.PythonScriptController):
             #Treating the z axis values, starting at 150mm from the leapmtion to leave space for the hand to
             #move without getting out of range, after 400 its far enough and should be considered at max=>250
             if vectors[10][1] <= 150:
-                outputVector[12] = 0
+                global interZ
+                interZ = 0 #outputVector[12] = 0
             elif vectors[10][1] >= 400:
-                outputVector[12] = 250
+                global interZ
+                interZ = 250 #outputVector[12] = 250
             else:
-                outputVector[12] = vectors[10][1]-150
+                global interZ
+                interZ = vectors[10][1]-150 #outputVector[12] = vectors[10][1]-150
+            outputVector[12] = lastValueZ * (1-alpha) + interZ * alpha
+            global lastValueZ
+            lastValueZ = outputVector[12]
+            print(outputVector[12])
 
-            #if it is then we will manually map the x axis values on the 18 cm range the platform can move 
-            if vectors[10][0] <= -200:
+            #Mapping the values from the LeapMotion onto our possible values between 4 and 22cm on the X-axis 
+            if vectors[10][0] > -200 and vectors[10][0] < 200:
+                outputVector[13] = (vectors[10][0]+200)*18/400+4
+            elif vectors[10][0] < -200:
                 outputVector[13] = 4
-            elif vectors[10][0] > -200 and vectors[10][0] <= -150:
-                outputVector[13] = 6
-            elif vectors[10][0] > -150 and vectors[10][0] <= -100:
-                outputVector[13] = 8
-            elif vectors[10][0] > -100 and vectors[10][0] <= -50:
-                outputVector[13] = 10
-            elif vectors[10][0] > -50 and vectors[10][0] <= 0:
-                outputVector[13] = 12
-            elif vectors[10][0] > 0 and vectors[10][0] <= 50:
-                outputVector[13] = 14
-            elif vectors[10][0] > 50 and vectors[10][0] <= 100:
-                outputVector[13] = 16
-            elif vectors[10][0] > 100 and vectors[10][0] <= 150:
-                outputVector[13] = 18
-            elif vectors[10][0] > 150 and vectors[10][0] <= 200:
-                outputVector[13] = 20
-            elif vectors[10][0] > 200:
+            else:
                 outputVector[13] = 22
 
 
