@@ -29,3 +29,5 @@ http://www.eprojectszone.com/how-to-modify-the-pwm-frequency-on-the-arduino-part
 https://www.arduino.cc/en/Tutorial/SecretsOfArduinoPWM
 
 https://playground.arduino.cc/Main/TimerPWMCheatsheet
+
+https://hal.inria.fr/hal-00670496/document
