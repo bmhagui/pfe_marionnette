@@ -75,8 +75,8 @@ while True:
                 for i in range(0,10):
                     output[i] = projections[i]
                 output[10] = projections[10]
-                print("X AND Z")
-                print(output[10])
+                #print("X AND Z")
+                #print(output[10])
                 socket.send_pyobj(output)
 
             else:

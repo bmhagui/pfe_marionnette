@@ -296,19 +296,17 @@ class controller(Sofa.PythonScriptController):
             
             #Treating the z axis values, starting at 150mm from the leapmtion to leave space for the hand to
             #move without getting out of range, after 400 its far enough and should be considered at max=>250
+            global interZ
+            global lastValueZ
             if vectors[10][1] <= 150:
-                global interZ
                 interZ = 0 #outputVector[12] = 0
             elif vectors[10][1] >= 400:
-                global interZ
                 interZ = 250 #outputVector[12] = 250
             else:
-                global interZ
                 interZ = vectors[10][1]-150 #outputVector[12] = vectors[10][1]-150
             outputVector[12] = lastValueZ * (1-alpha) + interZ * alpha
-            global lastValueZ
             lastValueZ = outputVector[12]
-            print(outputVector[12])
+            #print(outputVector[12])
 
             #Mapping the values from the LeapMotion onto our possible values between 4 and 22cm on the X-axis 
             if vectors[10][0] > -200 and vectors[10][0] < 200:
