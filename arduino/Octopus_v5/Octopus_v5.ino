@@ -60,7 +60,8 @@ void setup()
 void loop()
 {
   
-  //Last two values of the table positions are coordinates for the z axis and x axis respectively
+  /*Last two values of the table positions are coordinates 
+   for the z axis and x axis respectively*/
   if (Serial.available())
   {
     header = Serial.read();
@@ -75,12 +76,12 @@ void loop()
       positions[i] = Serial.read();
     }
   }
-  //Only going upto 130 for security measures and to avoid having the rail come off the motor.
-  for (int i = 1; i < 13; i++)
+  /*Only going upto 130 for security measures and to 
+   avoid having the rail come off the motor.*/
+  for (int i = 1; i < 14; i++)
   {
     Herkulex.moveAllAngle(i, map(positions[i], 0, 255, -150, 130 ), LED_GREEN);
   }
-  Herkulex.moveAllAngle(13, map(positions[13], 0, 255, -150, 130 ), LED_GREEN);
   Herkulex.actionAll(200);
 
 
@@ -92,8 +93,9 @@ void loop()
   duration = pulseIn(echoPin, HIGH);
   distance= duration*0.034/2;
 
-  //The first three conditions are for security, making sure that the platform is not at its maximum positions and that the user's hand is in range of the LeapMotion
-  //The other three are to detect that the platform is in the right position with a margin of error of 1 cm
+  /*Only move if difference between goal and current state is more than 1cm
+   AND current position is not on the limits 4 or 22 
+   AND we have the hand in the range of the LeapMotion */
   
   if (distance-positions[14] > 1 && distance > 4 && positions[14]!=0)
   {
@@ -101,7 +103,7 @@ void loop()
     digitalWrite(PINdir, HIGH);
     analogWrite(PINstep,30);
   }
-  else if (positions[14]-distance > 1  && distance < 25 && positions[14]!=0)
+  else if (positions[14]-distance > 1  && distance < 22 && positions[14]!=0)
   {
     OCR1A = map(positions[14]-distance,2,12,70,50);
     digitalWrite(PINdir, LOW);
